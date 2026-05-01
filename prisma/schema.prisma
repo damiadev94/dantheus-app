@@ -1,0 +1,532 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// PRISMA SCHEMA — Sistema de Gestión Personal
+// Base de datos: PostgreSQL (Neon serverless)
+// ORM: Prisma 5.x
+//
+// Convenciones:
+//   - IDs: String con @default(cuid()) — más corto que UUID, URL-safe
+//   - Timestamps: DateTime con @default(now()) y @updatedAt
+//   - Enums: PascalCase en Prisma, snake_case en DB (@map)
+//   - Tablas: snake_case en DB (@@map), PascalCase en Prisma
+//   - FKs opcionales: marcadas con ? y comentario explicando la regla
+// ─────────────────────────────────────────────────────────────────────────────
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Neon requiere directUrl para migraciones (conexión directa, no pooled)
+  directUrl = env("DIRECT_URL")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENUMS
+// Definidos antes de los modelos para claridad.
+// En PostgreSQL se crean como tipos nativos — más eficientes que strings.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Tipos de cuenta financiera
+enum AccountType {
+  CASH           @map("cash")           // Efectivo
+  BANK           @map("bank")           // Cuenta bancaria
+  DIGITAL_WALLET @map("digital_wallet") // MercadoPago, Ualá, etc.
+  CREDIT         @map("credit")         // Tarjeta de crédito / deuda
+  INVESTMENT     @map("investment")     // Inversiones
+
+  @@map("account_type")
+}
+
+// Tipo de nota/recurso
+enum NoteType {
+  NOTE     @map("note")     // Nota simple
+  RESOURCE @map("resource") // Recurso externo (artículo, video, doc)
+  LEARNING @map("learning") // Aprendizaje activo
+
+  @@map("note_type")
+}
+
+// Scope: determina si una entidad es global (usuario) o local (workspace)
+enum ScopeType {
+  GLOBAL @map("global") // Pertenece al usuario, visible en todos los workspaces
+  LOCAL  @map("local")  // Pertenece a un workspace específico
+
+  @@map("scope_type")
+}
+
+// Estado de una nota
+enum NoteStatus {
+  ACTIVE   @map("active")   // Activa y visible
+  ARCHIVED @map("archived") // Archivada, oculta por defecto
+
+  @@map("note_status")
+}
+
+// Estado de progreso para recursos y aprendizaje (R19: solo type=RESOURCE|LEARNING)
+enum LearningStatus {
+  PENDING     @map("pending")      // Sin empezar
+  IN_PROGRESS @map("in_progress")  // En progreso
+  COMPLETED   @map("completed")    // Completado
+
+  @@map("learning_status")
+}
+
+// Estado de un proyecto
+enum ProjectStatus {
+  IDEA   @map("idea")   // Idea o potencial, sin compromiso
+  ACTIVE @map("active") // En desarrollo activo
+  PAUSED @map("paused") // Pausado temporalmente
+  CLOSED @map("closed") // Cerrado (completado o cancelado)
+
+  @@map("project_status")
+}
+
+// Estado de una tarea
+enum TaskStatus {
+  PENDING     @map("pending")     // Sin empezar
+  IN_PROGRESS @map("in_progress") // En progreso
+  DONE        @map("done")        // Completada
+  CANCELLED   @map("cancelled")   // Cancelada (distinto a DONE: no se completó)
+
+  @@map("task_status")
+}
+
+// Prioridad de una tarea
+enum TaskPriority {
+  LOW    @map("low")    // Baja prioridad
+  MEDIUM @map("medium") // Media (default)
+  HIGH   @map("high")   // Alta prioridad
+
+  @@map("task_priority")
+}
+
+// Tipo de movimiento financiero
+enum TransactionType {
+  INCOME   @map("income")   // Ingreso
+  EXPENSE  @map("expense")  // Gasto
+  TRANSFER @map("transfer") // Transferencia entre cuentas (genera 2 transactions: R11)
+
+  @@map("transaction_type")
+}
+
+// Estado de un movimiento financiero
+enum TransactionStatus {
+  EXECUTED  @map("executed")  // Ejecutado: impacta el balance (R10, R12)
+  SCHEDULED @map("scheduled") // Programado: no impacta el balance todavía
+
+  @@map("transaction_status")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODELOS — GLOBALES DEL USUARIO
+// Estas entidades pertenecen directamente al usuario y son visibles
+// desde cualquier workspace.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── User ─────────────────────────────────────────────────────────────────────
+// Punto de entrada de todo el sistema. Cada entidad está vinculada,
+// directa o indirectamente, a un User.
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  // Nunca se guarda la contraseña en texto plano.
+  // NextAuth maneja el hashing con bcrypt.
+  passwordHash String   @map("password_hash")
+  name         String
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // Relaciones — todo lo que posee el usuario
+  workspaces  Workspace[]
+  accounts    Account[]
+  categories  Category[]
+  globalNotes Note[]      // Solo notas con scope=GLOBAL
+  globalTags  Tag[]       // Solo tags con scope=GLOBAL
+
+  @@map("users")
+}
+
+// ── Account ───────────────────────────────────────────────────────────────────
+// Cuenta financiera global del usuario.
+// Los movimientos (Transaction) son locales al workspace pero referencian
+// esta entidad global.
+model Account {
+  id             String      @id @default(cuid())
+  userId         String      @map("user_id")
+  name           String                           // "MercadoPago", "Ualá", "PayPal"
+  type           AccountType
+  currency       String                           // ISO 4217: "ARS", "USD", "EUR"
+  initialBalance Decimal     @map("initial_balance") @db.Decimal(12, 2)
+  // currentBalance se calcula: initialBalance + SUM(executed incomes) - SUM(executed expenses)
+  // Se cachea aquí para evitar recalcular en cada request (R10)
+  currentBalance Decimal     @default(0) @map("current_balance") @db.Decimal(12, 2)
+  color          String?
+  icon           String?
+  isActive       Boolean     @default(true) @map("is_active")
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+
+  // Relaciones
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions       Transaction[]
+  installmentGroups  InstallmentGroup[]
+
+  @@index([userId])                    // Query frecuente: todas las cuentas del usuario
+  @@map("accounts")
+}
+
+// ── Category ──────────────────────────────────────────────────────────────────
+// Categorías de proyectos propios: SaaS, YouTube, Blog, etc.
+// Global del usuario para reutilizar en múltiples workspaces sin duplicar.
+model Category {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  name      String
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects Project[]
+
+  @@index([userId])
+  @@map("categories")
+}
+
+// ── Note ──────────────────────────────────────────────────────────────────────
+// Un solo modelo para nota, recurso y aprendizaje.
+// El campo `scope` determina si es global (userId presente) o local (workspaceId presente).
+// El campo `type` determina el comportamiento en la UI y los campos disponibles.
+//
+// Reglas críticas implementadas en la capa de negocio (no en DB):
+//   R4: nota LOCAL solo puede vincularse a proyectos del mismo workspace
+//   R5: nota GLOBAL puede vincularse a proyectos de cualquier workspace del usuario
+//   R19: learningStatus solo aplica si type=RESOURCE|LEARNING
+model Note {
+  id             String          @id @default(cuid())
+  // Exactamente uno de estos dos debe estar presente (enforzado en lógica de negocio)
+  userId         String?         @map("user_id")      // Presente si scope=GLOBAL
+  workspaceId    String?         @map("workspace_id") // Presente si scope=LOCAL
+  title          String
+  // Contenido rich text en formato Tiptap JSON.
+  // Json en Prisma → jsonb en PostgreSQL (más eficiente que json para queries)
+  content        Json?
+  type           NoteType
+  scope          ScopeType
+  status         NoteStatus      @default(ACTIVE)
+  url            String?                              // Para recursos externos
+  // Solo aplica si type=RESOURCE|LEARNING (R19)
+  learningStatus LearningStatus? @map("learning_status")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  // Relaciones
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects  NoteProject[]
+  tags      NoteTag[]
+
+  @@index([userId, scope])                         // Dashboard: notas globales del usuario
+  @@index([workspaceId, scope])                    // Vista de notas del workspace
+  @@index([userId, learningStatus])                // Dashboard: recursos pendientes
+  @@index([type, learningStatus])                  // Filtro por tipo y estado de aprendizaje
+  @@map("notes")
+}
+
+// ── Tag ───────────────────────────────────────────────────────────────────────
+// Etiquetas para clasificar notas y transacciones.
+// Global (userId) o local (workspaceId) según scope.
+// R6: un tag local solo puede usarse en su mismo workspace (enforzado en lógica de negocio)
+model Tag {
+  id          String     @id @default(cuid())
+  // Exactamente uno presente según scope
+  userId      String?    @map("user_id")      // Presente si scope=GLOBAL
+  workspaceId String?    @map("workspace_id") // Presente si scope=LOCAL
+  name        String
+  color       String?
+  scope       ScopeType
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  // Relaciones
+  user         User?             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace    Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  notes        NoteTag[]
+  transactions TransactionTag[]
+
+  @@index([userId])
+  @@index([workspaceId])
+  @@map("tags")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODELOS — LOCALES DEL WORKSPACE
+// Estas entidades viven dentro de un workspace específico y están aisladas
+// de otros workspaces del mismo usuario.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Workspace ─────────────────────────────────────────────────────────────────
+// Contenedor de un contexto de negocio o proyecto.
+// R15: al crearse, se genera automáticamente un Project{isGeneral:true}
+// R17: desactivar oculta sin eliminar datos
+model Workspace {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  name        String
+  description String?
+  color       String?
+  icon        String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relaciones
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projects         Project[]
+  clients          Client[]
+  transactions     Transaction[]
+  installmentGroups InstallmentGroup[]
+  workspaceGoals   WorkspaceGoal[]
+  localNotes       Note[]            // Notas con scope=LOCAL de este workspace
+  localTags        Tag[]             // Tags con scope=LOCAL de este workspace
+
+  @@index([userId, isActive])        // Query frecuente: workspaces activos del usuario
+  @@map("workspaces")
+}
+
+// ── Client ────────────────────────────────────────────────────────────────────
+// Persona o empresa para quien el usuario realiza trabajo.
+// Local al workspace: el "Cliente A" del workspace Freelance no existe en el workspace SaaS.
+model Client {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  email       String?
+  phone       String?
+  notes       String?
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relaciones
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projects  Project[]
+
+  @@index([workspaceId])
+  @@map("clients")
+}
+
+// ── Project ───────────────────────────────────────────────────────────────────
+// Entidad central del sistema de gestión de trabajo.
+//
+// Reglas críticas:
+//   R1: clientId XOR categoryId (enforzado en lógica de negocio)
+//       - clientId presente → proyecto de cliente
+//       - categoryId presente → proyecto propio
+//       - ambos null → proyecto General (isGeneral=true)
+//   R2: isGeneral=true → no se puede eliminar
+//   R3: exactamente 1 proyecto con isGeneral=true por workspace
+model Project {
+  id             String        @id @default(cuid())
+  workspaceId    String        @map("workspace_id")
+  // R1: solo uno de estos dos debe estar presente
+  clientId       String?       @map("client_id")
+  categoryId     String?       @map("category_id")
+  name           String
+  description    String?
+  status         ProjectStatus @default(IDEA)
+  startDate      DateTime?     @map("start_date") @db.Date
+  endDate        DateTime?     @map("end_date") @db.Date
+  budget         Decimal?      @db.Decimal(12, 2)
+  budgetCurrency String?       @map("budget_currency")
+  // R2 y R3: flag del proyecto especial indestructible
+  isGeneral      Boolean       @default(false) @map("is_general")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  // Relaciones
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  client       Client?       @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  category     Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tasks        Task[]
+  notes        NoteProject[]
+  transactions Transaction[]
+
+  @@index([workspaceId, status])     // Dashboard: proyectos activos del workspace
+  @@index([workspaceId, isGeneral])  // Buscar el proyecto General del workspace
+  @@index([clientId])
+  @@index([categoryId])
+  @@map("projects")
+}
+
+// ── Task ──────────────────────────────────────────────────────────────────────
+// Unidad atómica de trabajo. Siempre dentro de un proyecto.
+// Las tareas sueltas van al proyecto General del workspace (isGeneral=true).
+model Task {
+  id          String       @id @default(cuid())
+  projectId   String       @map("project_id")
+  title       String
+  description String?
+  status      TaskStatus   @default(PENDING)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?    @map("due_date") @db.Date
+  // Para drag & drop en la UI. Se actualiza al reordenar.
+  order       Int          @default(0)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  // Relaciones
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, status])       // Dashboard: tareas pendientes por proyecto
+  @@index([projectId, order])        // Ordenamiento en la UI
+  @@index([dueDate])                 // Tareas próximas a vencer
+  @@map("tasks")
+}
+
+// ── Transaction ───────────────────────────────────────────────────────────────
+// Movimiento financiero dentro de un workspace.
+// Referencia una Account global pero vive en el contexto del workspace.
+//
+// Reglas críticas:
+//   R10: balance = initial + SUM(executed incomes) - SUM(executed expenses)
+//   R11: type=TRANSFER genera 2 transactions (expense en origen, income en destino)
+//   R12: solo status=EXECUTED impacta resúmenes y metas
+//   R14: status=SCHEDULED se ejecuta automáticamente al llegar la fecha (job diario)
+model Transaction {
+  id           String            @id @default(cuid())
+  workspaceId  String            @map("workspace_id")
+  accountId    String            @map("account_id")
+  // Opcional: vincula el movimiento a un proyecto específico
+  projectId    String?           @map("project_id")
+  type         TransactionType
+  amount       Decimal           @db.Decimal(12, 2)
+  // Hereda la moneda de la cuenta al crear. Se guarda para histórico
+  // (si cambia la moneda de la cuenta, los movimientos viejos conservan la suya)
+  currency     String
+  description  String?
+  date         DateTime          @db.Date
+  status       TransactionStatus @default(EXECUTED)
+  isRecurring  Boolean           @default(false) @map("is_recurring")
+  // Presente si este movimiento pertenece a un grupo de cuotas
+  recurrenceId String?           @map("recurrence_id")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  // Relaciones
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account          Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  project          Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  installmentGroup InstallmentGroup? @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  tags             TransactionTag[]
+
+  // Índices críticos para performance del resumen financiero mensual (F3)
+  @@index([workspaceId, status, date])   // Resumen mensual: workspace + executed + mes
+  @@index([accountId, status])           // Cálculo de balance por cuenta
+  @@index([workspaceId, date])           // Timeline financiero del workspace
+  @@index([recurrenceId])                // Cuotas de un InstallmentGroup
+  @@map("transactions")
+}
+
+// ── InstallmentGroup ──────────────────────────────────────────────────────────
+// Agrupa N transactions que representan el pago en cuotas de un gasto.
+// R9: al crearse, genera automáticamente N transactions con status=SCHEDULED
+// R14: el job diario marca las transactions como EXECUTED al llegar su fecha
+model InstallmentGroup {
+  id               String   @id @default(cuid())
+  workspaceId      String   @map("workspace_id")
+  accountId        String   @map("account_id")
+  description      String
+  totalAmount      Decimal  @map("total_amount") @db.Decimal(12, 2)
+  installmentCount Int      @map("installment_count")
+  startDate        DateTime @map("start_date") @db.Date
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  account      Account       @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  transactions Transaction[] // Las N cuotas generadas
+
+  @@index([workspaceId])
+  @@map("installment_groups")
+}
+
+// ── WorkspaceGoal ─────────────────────────────────────────────────────────────
+// Metas financieras por workspace y período mensual.
+// R13: se evalúan comparando contra las transactions EXECUTED del mismo período.
+model WorkspaceGoal {
+  id            String   @id @default(cuid())
+  workspaceId   String   @map("workspace_id")
+  // Formato YYYY-MM. Ej: "2025-05"
+  // String en lugar de Date porque las metas son mensuales, no de un día específico.
+  period        String
+  incomeTarget  Decimal? @map("income_target") @db.Decimal(12, 2)
+  expenseLimit  Decimal? @map("expense_limit") @db.Decimal(12, 2)
+  savingsTarget Decimal? @map("savings_target") @db.Decimal(12, 2)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Relaciones
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  // Un workspace solo puede tener una meta por período
+  @@unique([workspaceId, period])
+  @@index([workspaceId])
+  @@map("workspace_goals")
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TABLAS DE RELACIÓN (N:M)
+// Implementan las relaciones muchos-a-muchos.
+// Las PK compuestas evitan duplicados sin índice adicional.
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── NoteProject ───────────────────────────────────────────────────────────────
+// Vincula notas a proyectos.
+// R4: nota LOCAL → solo proyectos del mismo workspace (enforzado en lógica de negocio)
+// R5: nota GLOBAL → proyectos de cualquier workspace del mismo usuario
+model NoteProject {
+  noteId    String   @map("note_id")
+  projectId String   @map("project_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // Relaciones
+  note    Note    @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, projectId])          // PK compuesta: evita vínculos duplicados
+  @@index([projectId])               // "Dame todas las notas de este proyecto"
+  @@map("note_projects")
+}
+
+// ── NoteTag ───────────────────────────────────────────────────────────────────
+model NoteTag {
+  noteId String @map("note_id")
+  tagId  String @map("tag_id")
+
+  // Relaciones
+  note Note @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([noteId, tagId])
+  @@index([tagId])                   // "Dame todas las notas con este tag"
+  @@map("note_tags")
+}
+
+// ── TransactionTag ────────────────────────────────────────────────────────────
+model TransactionTag {
+  transactionId String @map("transaction_id")
+  tagId         String @map("tag_id")
+
+  // Relaciones
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  tag         Tag         @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([transactionId, tagId])
+  @@index([tagId])                   // "Dame todas las transacciones con este tag"
+  @@map("transaction_tags")
+}
