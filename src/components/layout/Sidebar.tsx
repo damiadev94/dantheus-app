@@ -2,7 +2,22 @@
 
 import Link from "next/link";
 
-export function Sidebar() {
+interface SidebarProps {
+  userId: string
+  userName: string
+  workspaces: {
+    id: string
+    name: string
+    color: string | null
+    icon: string | null
+    pendingTasksCount: number
+    projects: {
+      tasks: { id: string }[]
+    }[]
+  }[]
+}
+
+export function Sidebar({ userId, userName, workspaces }: SidebarProps) {
   return (
     <aside className="flex w-60 flex-col border-r bg-gray-50 p-4">
       <Link href="/" className="mb-6 text-lg font-bold">

@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createProjectSchema = z.object({
+  workspaceId: z.string().cuid(),
   name: z.string().min(1, "El nombre es obligatorio").max(200),
   description: z.string().max(1000).optional(),
   status: z.enum(["IDEA", "ACTIVE", "PAUSED", "CLOSED"]).default("IDEA"),

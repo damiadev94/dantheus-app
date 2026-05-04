@@ -1,23 +1,40 @@
-import type { Metadata } from "next";
-import "./globals.css";
-import { Geist } from "next/font/google";
-import { cn } from "@/lib/utils";
+// src/app/layout.tsx
+// ─────────────────────────────────────────────────────────────────────────────
+// Layout raíz de la aplicación.
+// Aplica a TODAS las páginas sin excepción.
+// Responsabilidades: fuente global, metadatos base, proveedores globales.
+// ─────────────────────────────────────────────────────────────────────────────
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
+import type { Metadata } from 'next'
+import { Geist } from 'next/font/google'
+import './globals.css'
 
-export const metadata: Metadata = {
-  title: "Dantheus",
-  description: "Sistema de gestión personal de proyectos, finanzas y notas",
-};
+// Fuente principal — Geist es limpia y moderna, alineada con el estilo Notion/Linear
+const geist = Geist({
+  subsets: ['latin'],
+  variable: '--font-geist',
+})
 
-export default function RootLayout({
+export const metadata: Metadata = { // Metadatos globales para SEO y redes sociales
+  title: {
+    // template: el %s se reemplaza por el título específico de cada página
+    // Ejemplo: 'Dashboard | LifeOS', 'SaaS | LifeOS'
+    template: '%s | LifeOS',
+    default: 'LifeOS',
+  },
+  description: 'Sistema de gestión personal — proyectos, finanzas y aprendizaje',
+}
+
+export default function RootLayout({ // El prop "children" representa el contenido de cada página específica
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
-    <html lang="es" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+    <html lang="es" suppressHydrationWarning>
+      <body className={`${geist.variable} font-sans antialiased`}>
+        {children}
+      </body>
     </html>
-  );
+  )
 }

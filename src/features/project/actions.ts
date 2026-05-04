@@ -1,51 +1,89 @@
-"use server";
-
-import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
-import type { CreateProjectInput, UpdateProjectInput } from "./types";
-
-export async function createProject(
-  workspaceId: string,
-  input: CreateProjectInput
-) {
-  const project = await prisma.project.create({
-    data: {
-      workspaceId,
-      name: input.name,
-      description: input.description,
-      status: input.status ?? "IDEA",
-      clientId: input.clientId,
-      categoryId: input.categoryId,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      budget: input.budget,
-      budgetCurrency: input.budgetCurrency,
-    },
-  });
-
-  revalidatePath(`/workspace/${workspaceId}/projects`);
-  return project;
+'use server'
+ 
+import { revalidatePath } from 'next/cache'
+import { auth }           from '@/lib/auth'
+import { prisma }         from '@/lib/prisma'
+import { createProjectSchema } from '@/lib/validations/project'
+ 
+// ── createProject ──────────────────────────────────────────────────────────────
+export async function createProject(formData: unknown) {
+ 
+  // ETAPA 1 — Autenticar
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('No autorizado')
+ 
+  // ETAPA 2 — Validar (incluye R1: clientId XOR categoryId via .refine())
+  const parsed = createProjectSchema.safeParse(formData)
+  if (!parsed.success) {
+    return { error: parsed.error.name }
+  }
+  const workspaceId = parsed.data.workspaceId // workspaceId es un campo oculto en el formulario, no viene del cliente
+ 
+  // ETAPA 3 — Autorizar: el workspace pertenece al usuario
+  const workspace = await prisma.workspace.findFirst({
+    where: { id: workspaceId, userId: session.user.id },
+  })
+  if (!workspace) return { error: 'Workspace no encontrado' }
+ 
+  // ETAPA 4 — Crear el proyecto
+  const project = await prisma.project.create({ data: parsed.data })
+ 
+  // ETAPA 5 — Revalidar
+  revalidatePath(`/workspace/${parsed.data.workspaceId}/projects`)
+  return { project }
 }
-
-export async function updateProject(
+ 
+// ── updateProjectStatus ────────────────────────────────────────────────────────
+// Actualiza el estado de un proyecto (idea → active → paused → closed)
+export async function updateProjectStatus(
   projectId: string,
-  workspaceId: string,
-  input: UpdateProjectInput
+  status: 'IDEA' | 'ACTIVE' | 'PAUSED' | 'CLOSED'
 ) {
-  const project = await prisma.project.update({
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('No autorizado')
+ 
+  // Verificar autorización via workspace
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      workspace: { userId: session.user.id },
+    },
+    select: { id: true, workspaceId: true },
+  })
+  if (!project) return { error: 'Proyecto no encontrado' }
+ 
+  await prisma.project.update({
     where: { id: projectId },
-    data: input,
-  });
-
-  revalidatePath(`/workspace/${workspaceId}/projects`);
-  return project;
+    data: { status },
+  })
+ 
+  revalidatePath(`/workspace/${project.workspaceId}/projects`)
+  return { success: true }
 }
-
-export async function deleteProject(projectId: string, workspaceId: string) {
-  // R2: cannot delete the General project
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (project?.isGeneral) throw new Error("No se puede eliminar el proyecto General");
-
-  await prisma.project.delete({ where: { id: projectId } });
-  revalidatePath(`/workspace/${workspaceId}/projects`);
+ 
+// ── deleteProject ──────────────────────────────────────────────────────────────
+// Implementa R2: el proyecto General (isGeneral=true) no puede eliminarse.
+export async function deleteProject(projectId: string) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error('No autorizado')
+ 
+  const project = await prisma.project.findFirst({
+    where: {
+      id: projectId,
+      workspace: { userId: session.user.id },
+    },
+    select: { id: true, workspaceId: true, isGeneral: true },
+  })
+  if (!project) return { error: 'Proyecto no encontrado' }
+ 
+  // R2: el proyecto General no puede eliminarse
+  if (project.isGeneral) {
+    return { error: 'El proyecto General no puede eliminarse' }
+  }
+ 
+  // La cascada elimina también todas las tareas del proyecto
+  await prisma.project.delete({ where: { id: projectId } })
+ 
+  revalidatePath(`/workspace/${project.workspaceId}/projects`)
+  return { success: true }
 }

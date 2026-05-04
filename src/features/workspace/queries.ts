@@ -1,14 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
-export async function getWorkspaces(userId: string) {
-  return prisma.workspace.findMany({
-    where: { userId, isActive: true },
-    orderBy: { createdAt: "asc" },
+export async function getWorkspace(workspaceId: string, userId: string) {
+  return prisma.workspace.findFirst({
+    where: { id: workspaceId, userId, isActive: true },
   });
 }
 
-export async function getWorkspace(workspaceId: string) {
-  return prisma.workspace.findUnique({
-    where: { id: workspaceId },
-  });
+export async function getWorkspacesWithMetrics (userId: string) {
+
 }
+

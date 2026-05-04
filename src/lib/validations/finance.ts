@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const createTransactionSchema = z.object({
+  workspaceId: z.string().cuid(),
   accountId: z.string().cuid(),
   projectId: z.string().cuid().optional(),
   type: z.enum(["INCOME", "EXPENSE", "TRANSFER"]),
@@ -8,10 +9,12 @@ export const createTransactionSchema = z.object({
   description: z.string().max(500).optional(),
   date: z.coerce.date(),
   status: z.enum(["EXECUTED", "SCHEDULED"]).default("EXECUTED"),
+  destinationAccountId: z.string().cuid().optional(), // Solo para TRANSFER
 });
 
 export const createInstallmentSchema = z.object({
   accountId: z.string().cuid(),
+  workspaceId: z.string().cuid(),
   description: z.string().min(1),
   totalAmount: z.number().positive(),
   installmentCount: z.number().int().min(2).max(60),
