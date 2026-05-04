@@ -7,6 +7,7 @@
 
 import type { Metadata } from 'next'
 import { Geist } from 'next/font/google'
+import { AppProviders } from '@/components/providers/AppProviders'
 import './globals.css'
 
 // Fuente principal — Geist es limpia y moderna, alineada con el estilo Notion/Linear
@@ -33,7 +34,7 @@ export default function RootLayout({ // El prop "children" representa el conteni
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${geist.variable} font-sans antialiased`}>
-        {children}
+        <AppProviders>{children}</AppProviders>
       </body>
     </html>
   )

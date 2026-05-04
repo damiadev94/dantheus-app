@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import type { AuthUser } from "@/features/auth/types";
 
-export function useCurrentUser() {
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+export function useCurrentUser(): { user: AuthUser | null; isLoading: boolean } {
+  const { data: session, status } = useSession();
 
-  useEffect(() => {
-    // TODO: fetch session from NextAuth
-    setIsLoading(false);
-  }, []);
+  const user: AuthUser | null = session?.user
+    ? {
+        id: session.user.id,
+        email: session.user.email ?? "",
+        name: session.user.name ?? "",
+        avatarUrl: session.user.image ?? null,
+      }
+    : null;
 
-  return { user, isLoading };
+  return {
+    user,
+    isLoading: status === "loading",
+  };
 }
