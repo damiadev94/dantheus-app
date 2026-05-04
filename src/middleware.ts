@@ -13,7 +13,8 @@ export const proxy = auth((req) => {
     pathname.startsWith("/workspace") ||
     pathname.startsWith("/library") ||
     pathname.startsWith("/accounts");
-
+    pathname.startsWith("/dashboard");
+    
   if (isProtectedRoute && !isLoggedIn) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
