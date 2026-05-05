@@ -1,10 +1,15 @@
 "use server";
 
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import type { Prisma } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import type { CreateNoteInput, UpdateNoteInput } from "./types";
 
+// ─── Actions ──────────────────────────────────────────────────────────────────
+// ! Falta autenticación — estas actions no verifican sesión ni autorización
+
+// ownerKey determina el scope: { userId } = GLOBAL, { workspaceId } = LOCAL (R4, R5)
 export async function createNote(
   ownerKey: { userId: string } | { workspaceId: string },
   input: CreateNoteInput

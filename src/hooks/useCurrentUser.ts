@@ -1,8 +1,10 @@
 "use client";
 
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import { useSession } from "next-auth/react";
 import type { AuthUser } from "@/features/auth/types";
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useCurrentUser(): { user: AuthUser | null; isLoading: boolean } {
   const { data: session, status } = useSession();
 

@@ -1,21 +1,17 @@
-export type AccountType =
-  | "CASH"
-  | "BANK"
-  | "DIGITAL_WALLET"
-  | "CREDIT"
-  | "INVESTMENT";
-
+// ─── Types ────────────────────────────────────────────────────────────────────
+export type AccountType = "CASH" | "BANK" | "DIGITAL_WALLET" | "CREDIT" | "INVESTMENT";
 export type TransactionType = "INCOME" | "EXPENSE" | "TRANSFER";
+// ! R12: solo EXECUTED impacta balances y resúmenes — SCHEDULED es ignorado hasta que el cron lo ejecuta
 export type TransactionStatus = "EXECUTED" | "SCHEDULED";
 
 export type Account = {
   id: string;
-  userId: string;
+  userId: string; // global — sobrevive a la eliminación de workspaces (R8)
   name: string;
   type: AccountType;
   currency: string;
   initialBalance: number;
-  currentBalance: number;
+  currentBalance: number; // R10: initialBalance + Σ(incomes) - Σ(expenses) EXECUTED
   color: string | null;
   icon: string | null;
   isActive: boolean;
@@ -33,7 +29,7 @@ export type Transaction = {
   date: Date;
   status: TransactionStatus;
   isRecurring: boolean;
-  recurrenceId: string | null;
+  recurrenceId: string | null; // referencia al InstallmentGroup padre
   createdAt: Date;
   updatedAt: Date;
 };
@@ -52,5 +48,5 @@ export type MonthlySummary = {
   income: number;
   expenses: number;
   savings: number;
-  period: string;
+  period: string; // formato YYYY-MM
 };

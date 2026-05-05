@@ -1,5 +1,6 @@
 "use client";
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function Navbar() {
   return (
     <header className="flex h-14 items-center justify-between border-b px-6">

@@ -1,11 +1,13 @@
 "use client";
 
+// ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   name: string;
   defaultValue?: string;
   label?: string;
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function DatePicker({ name, defaultValue, label }: Props) {
   return (
     <div className="space-y-1">

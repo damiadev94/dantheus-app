@@ -1,3 +1,4 @@
+// ─── Types ────────────────────────────────────────────────────────────────────
 export type Client = {
   id: string;
   workspaceId: string;

@@ -1,5 +1,7 @@
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import { z } from "zod";
 
+// ─── Schemas ──────────────────────────────────────────────────────────────────
 export const createTransactionSchema = z.object({
   workspaceId: z.string().cuid(),
   accountId: z.string().cuid(),
@@ -9,7 +11,7 @@ export const createTransactionSchema = z.object({
   description: z.string().max(500).optional(),
   date: z.coerce.date(),
   status: z.enum(["EXECUTED", "SCHEDULED"]).default("EXECUTED"),
-  destinationAccountId: z.string().cuid().optional(), // Solo para TRANSFER
+  destinationAccountId: z.string().cuid().optional(), // solo para type=TRANSFER (R11)
 });
 
 export const createInstallmentSchema = z.object({
@@ -21,5 +23,6 @@ export const createInstallmentSchema = z.object({
   startDate: z.coerce.date(),
 });
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 export type CreateTransactionSchema = z.infer<typeof createTransactionSchema>;
 export type CreateInstallmentSchema = z.infer<typeof createInstallmentSchema>;

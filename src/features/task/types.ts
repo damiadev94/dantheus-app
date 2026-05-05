@@ -1,3 +1,4 @@
+// ─── Types ────────────────────────────────────────────────────────────────────
 export type TaskStatus = "PENDING" | "IN_PROGRESS" | "DONE" | "CANCELLED";
 export type TaskPriority = "LOW" | "MEDIUM" | "HIGH";
 

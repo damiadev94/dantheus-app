@@ -1,3 +1,5 @@
+// ─── Types ────────────────────────────────────────────────────────────────────
+// ? R1: clientId XOR categoryId — un proyecto pertenece a un cliente O a una categoría, nunca ambos
 export type ProjectStatus = "IDEA" | "ACTIVE" | "PAUSED" | "CLOSED";
 
 export type Project = {
@@ -12,7 +14,7 @@ export type Project = {
   endDate: Date | null;
   budget: number | null;
   budgetCurrency: string | null;
-  isGeneral: boolean;
+  isGeneral: boolean; // R2: si true, no puede eliminarse
   createdAt: Date;
   updatedAt: Date;
 };

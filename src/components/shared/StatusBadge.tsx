@@ -1,15 +1,18 @@
+// ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   status: string;
   variant?: "default" | "success" | "warning" | "danger";
 };
 
+// ─── Constants ────────────────────────────────────────────────────────────────
 const variants: Record<string, string> = {
   default: "bg-gray-100 text-gray-700",
   success: "bg-green-100 text-green-700",
   warning: "bg-yellow-100 text-yellow-700",
-  danger: "bg-red-100 text-red-700",
+  danger:  "bg-red-100 text-red-700",
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function StatusBadge({ status, variant = "default" }: Props) {
   return (
     <span

@@ -1,12 +1,15 @@
 "use client";
 
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import type { Workspace } from "../types";
 
+// ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   workspaces: Workspace[];
   currentWorkspaceId: string;
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function WorkspaceSwitcher({ workspaces, currentWorkspaceId }: Props) {
   return (
     <select

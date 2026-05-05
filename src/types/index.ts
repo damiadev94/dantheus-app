@@ -1,3 +1,5 @@
+// ─── Re-exports ───────────────────────────────────────────────────────────────
+// Punto de entrada único para tipos globales — importar desde @/types en lugar de cada feature
 export type { AuthUser, LoginInput, RegisterInput } from "@/features/auth/types";
 export type { Workspace, CreateWorkspaceInput, UpdateWorkspaceInput } from "@/features/workspace/types";
 export type { Project, ProjectStatus, CreateProjectInput, UpdateProjectInput } from "@/features/project/types";

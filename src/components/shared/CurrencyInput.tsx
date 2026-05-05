@@ -1,5 +1,6 @@
 "use client";
 
+// ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   name: string;
   defaultValue?: number;
@@ -7,6 +8,7 @@ type Props = {
   placeholder?: string;
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function CurrencyInput({
   name,
   defaultValue,

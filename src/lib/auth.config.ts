@@ -1,14 +1,9 @@
-// src/lib/auth.config.ts
-// ─────────────────────────────────────────────────────────────────────────────
-// Configuración de NextAuth SIN imports de Prisma ni bcrypt.
-// Este archivo puede correr en el Edge Runtime (middleware).
-//
-// Por qué existe separado de auth.ts:
-//   auth.ts importa Prisma → no puede correr en Edge (límite 1MB, sin Node APIs)
-//   auth.config.ts solo define la config base → liviano, compatible con Edge
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Imports ──────────────────────────────────────────────────────────────────
+// ! Este archivo NO puede importar Prisma ni bcrypt — corre en Edge Runtime (middleware).
+// La config base vive aquí; los providers con DB se definen en auth.ts.
 import type { NextAuthConfig } from "next-auth";
 
+// ─── Config ───────────────────────────────────────────────────────────────────
 export const authConfig: NextAuthConfig = {
   pages: {
     signIn: "/login",
@@ -16,8 +11,7 @@ export const authConfig: NextAuthConfig = {
   },
   session: { strategy: "jwt" },
   callbacks: {
-    // En el middleware solo necesitamos saber si hay sesión (token válido).
-    // authorized() se llama en cada request — no puede tocar la DB.
+    // Se ejecuta en cada request — no puede tocar la DB
     authorized({ auth }) {
       return !!auth?.user; // true = dejar pasar, false = redirigir a signIn
     },
@@ -30,5 +24,5 @@ export const authConfig: NextAuthConfig = {
       return session;
     },
   },
-  providers: [], // Los providers se definen en auth.ts, no acá
+  providers: [], // providers reales definidos en auth.ts
 };

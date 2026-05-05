@@ -1,5 +1,8 @@
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import { z } from "zod";
 
+// ─── Schemas ──────────────────────────────────────────────────────────────────
+// ? R1: clientId XOR categoryId — nunca ambos, nunca ninguno en proyectos con cliente
 export const createProjectSchema = z.object({
   workspaceId: z.string().cuid(),
   name: z.string().min(1, "El nombre es obligatorio").max(200),
@@ -13,4 +16,5 @@ export const createProjectSchema = z.object({
   budgetCurrency: z.string().length(3).optional(),
 });
 
+// ─── Types ────────────────────────────────────────────────────────────────────
 export type CreateProjectSchema = z.infer<typeof createProjectSchema>;

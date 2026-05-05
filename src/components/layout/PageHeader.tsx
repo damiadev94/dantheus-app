@@ -1,9 +1,11 @@
+// ─── Props ────────────────────────────────────────────────────────────────────
 type Props = {
   title: string;
   description?: string;
   actions?: React.ReactNode;
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export function PageHeader({ title, description, actions }: Props) {
   return (
     <div className="mb-6 flex items-start justify-between">

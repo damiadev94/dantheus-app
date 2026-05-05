@@ -1,4 +1,7 @@
+// ─── Imports ──────────────────────────────────────────────────────────────────
 import { prisma } from "@/lib/prisma";
+
+// ─── Queries ──────────────────────────────────────────────────────────────────
 
 export async function getAccountBalance(accountId: string) {
   return prisma.account.findUnique({
@@ -7,6 +10,7 @@ export async function getAccountBalance(accountId: string) {
   });
 }
 
+// R12: filtra solo EXECUTED — las SCHEDULED no impactan el resumen mensual
 export async function getMonthlySummary(workspaceId: string, period: string) {
   const [year, month] = period.split("-").map(Number);
   const start = new Date(year, month - 1, 1);
