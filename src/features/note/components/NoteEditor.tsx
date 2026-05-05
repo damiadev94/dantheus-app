@@ -16,7 +16,7 @@ export function NoteEditor({ initialTitle = "", onSave }: Props) {
         className="w-full border-b pb-2 text-xl font-semibold outline-none"
       />
       <div
-        className="min-h-[200px] rounded border p-3 text-sm"
+        className="min-h-50 rounded border p-3 text-sm"
         contentEditable
         suppressContentEditableWarning
       />
