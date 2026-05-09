@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npm install *)",
-      "Bash(npm ls *)"
+      "Bash(npm ls *)",
+      "Bash(Get-ChildItem -Path \"d:\\\\[DEV]\\\\[PERSONAL] app-gestion-proyectos\\\\dantheus-app\" -Force)"
     ]
   }
 }

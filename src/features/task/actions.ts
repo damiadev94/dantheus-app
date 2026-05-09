@@ -14,7 +14,8 @@ export async function createTask(formData: FormData) {
   if (!session?.user?.id) throw new Error("No autorizado")
 
   // * 2. Validar
-  const parsed = createTaskSchema.safeParse(formData)
+  const raw = Object.fromEntries(formData.entries())
+  const parsed = createTaskSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.message }
 
   // * 3. Autorizar
@@ -62,6 +63,17 @@ export async function updateTaskStatus(
   return { success: true }
 }
 
-export async function deleteTask(_taskId: string) {
-  // TODO: implementar
+export async function deleteTask(taskId: string) {
+  const session = await auth()
+  if (!session?.user?.id) throw new Error("No autorizado")
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, project: { workspace: { userId: session.user.id } } },
+    select: { id: true, project: { select: { workspaceId: true } } },
+  })
+  if (!task) return { error: "Tarea no encontrada" }
+
+  await prisma.task.delete({ where: { id: taskId } })
+  revalidatePath(`/workspace/${task.project.workspaceId}/projects`)
+  return { success: true }
 }

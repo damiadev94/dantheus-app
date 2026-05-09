@@ -34,7 +34,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   }))
 
   return (
-    <div className="flex h-screen overflow-hidden bg-neutral-50">
+    <div className="flex h-screen overflow-hidden bg-background">
       <Sidebar
         userId={session.user.id}
         userName={session.user.name ?? ''}

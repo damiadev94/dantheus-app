@@ -10,15 +10,16 @@ import { createWorkspaceSchema } from '@/lib/validations/workspace'
 // Crea un nuevo workspace con su proyecto General incluido.
 // Implementa R15: al crear un workspace se crea automáticamente Project{isGeneral:true}
 // La creación es atómica: o se crean ambos o ninguno (transacción de DB).
-export async function createWorkspace(formData: FormData) {
- 
+export async function createWorkspace(formData: FormData | Record<string, unknown>) {
+
   // ETAPA 1 — Autenticar
   const session = await auth()
   if (!session?.user?.id) return { error: 'No autorizado' }
   const userId = session.user.id
 
   // ETAPA 2 — Validar
-  const parsed = createWorkspaceSchema.safeParse(formData)
+  const raw = formData instanceof FormData ? Object.fromEntries(formData.entries()) : formData
+  const parsed = createWorkspaceSchema.safeParse(raw)
   if (!parsed.success) {
     return { error: parsed.error.name }
   }
