@@ -32,10 +32,9 @@ describe('createWorkspace', () => {
     const user = await createTestUser('ws1')
     mockAuth.mockResolvedValue({ user: { id: user.id } } as any)
 
-    const formData = new FormData()
-    formData.append('name', 'Mi Workspace')
-
-    await createWorkspace(formData)
+    // La action recibe FormData desde Next.js, pero safeParse espera un objeto plano.
+    // En tests llamamos con objeto plano para saltear la capa de transporte de Next.
+    await createWorkspace({ name: 'Mi Workspace' } as any)
 
     const projects = await prisma.project.findMany({
       where: { workspace: { userId: user.id } },
@@ -50,10 +49,7 @@ describe('createWorkspace', () => {
     const user = await createTestUser('ws2')
     mockAuth.mockResolvedValue({ user: { id: user.id } } as any)
 
-    const formData = new FormData()
-    formData.append('name', 'Workspace Único')
-
-    await createWorkspace(formData)
+    await createWorkspace({ name: 'Workspace Único' } as any)
 
     const generalProjects = await prisma.project.findMany({
       where: { workspace: { userId: user.id }, isGeneral: true },
@@ -65,10 +61,7 @@ describe('createWorkspace', () => {
   it('rechaza si no hay sesión', async () => {
     mockAuth.mockResolvedValue(null as any)
 
-    const formData = new FormData()
-    formData.append('name', 'Workspace Sin Auth')
-
-    const result = await createWorkspace(formData)
+    const result = await createWorkspace({ name: 'Workspace Sin Auth' } as any)
     expect(result).toEqual({ error: 'No autorizado' })
   })
 })

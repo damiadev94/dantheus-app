@@ -7,9 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test": "dotenv -e .env.test vitest run",
+    "test:watch": "dotenv -e .env.test vitest",
+    "test:coverage": "dotenv -e .env.test vitest run --coverage"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
@@ -34,6 +34,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^4.7.0",
+    "dotenv": "^17.4.2",
+    "dotenv-cli": "^11.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "prisma": "^6.19.3",
