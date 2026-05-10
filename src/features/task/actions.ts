@@ -13,7 +13,7 @@ export async function createTask(formData: FormData) {
   const session = await auth()
   if (!session?.user?.id) throw new Error("No autorizado")
 
-  // * 2. Validar
+  // * 2. Validar — Zod v4 no parsea FormData nativo; convertir primero
   const raw = Object.fromEntries(formData.entries())
   const parsed = createTaskSchema.safeParse(raw)
   if (!parsed.success) return { error: parsed.error.message }

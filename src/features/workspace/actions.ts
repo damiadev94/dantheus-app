@@ -10,6 +10,7 @@ import { createWorkspaceSchema } from '@/lib/validations/workspace'
 // Crea un nuevo workspace con su proyecto General incluido.
 // Implementa R15: al crear un workspace se crea automáticamente Project{isGeneral:true}
 // La creación es atómica: o se crean ambos o ninguno (transacción de DB).
+// Acepta FormData (form nativo) y objeto plano (componente cliente) — Zod no parsea FormData directamente
 export async function createWorkspace(formData: FormData | Record<string, unknown>) {
 
   // ETAPA 1 — Autenticar

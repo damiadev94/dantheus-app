@@ -14,9 +14,11 @@ export default async function WorkspacePage({
 }: PageProps<"/workspace/[workspaceId]">) {
   const { workspaceId } = await params;
 
+  // ─── Autenticacion ────────────────────────────────────────────────────────
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
+  // ─── Carga de datos en paralelo ───────────────────────────────────────────
   const [workspace, projects, pendingTasks, summary] = await Promise.all([
     getWorkspace(workspaceId, session.user.id),
     getProjectsByWorkspace(workspaceId),
@@ -24,11 +26,15 @@ export default async function WorkspacePage({
     getMonthlySummary(workspaceId, getCurrentPeriod()),
   ]);
 
+  // Si el workspace no existe o no pertenece al usuario
   if (!workspace) notFound();
 
+  // ─── Datos derivados ──────────────────────────────────────────────────────
   const activeProjects = projects.filter((p) => p.status === "ACTIVE").length;
+  // Excluir el proyecto General y limitar a 6 tarjetas
   const visibleProjects = projects.filter((p) => !p.isGeneral).slice(0, 6);
 
+  // ─── Vista ────────────────────────────────────────────────────────────────
   return (
     <div>
       <PageHeader
@@ -48,7 +54,7 @@ export default async function WorkspacePage({
 
       <div className="px-8 py-6 space-y-8">
 
-        {/* Stats */}
+        {/* Metricas del workspace */}
         <div className="grid grid-cols-3 gap-4">
           <StatCard
             icon={<FolderKanban size={16} className="text-primary" />}
@@ -67,7 +73,7 @@ export default async function WorkspacePage({
           />
         </div>
 
-        {/* Projects grid */}
+        {/* Grilla de proyectos recientes (max 6) */}
         {visibleProjects.length > 0 && (
           <section>
             <div className="mb-3 flex items-center justify-between">
@@ -87,7 +93,7 @@ export default async function WorkspacePage({
           </section>
         )}
 
-        {/* Pending tasks */}
+        {/* Lista de tareas pendientes del workspace */}
         {pendingTasks.length > 0 && (
           <section>
             <h2 className="mb-3 text-sm font-semibold text-foreground">
@@ -100,6 +106,7 @@ export default async function WorkspacePage({
                   className="flex items-center justify-between gap-4 px-4 py-2.5"
                 >
                   <p className="text-sm text-foreground">{task.title}</p>
+                  {/* Nombre del proyecto al que pertenece la tarea */}
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {task.project.name}
                   </span>
@@ -109,12 +116,13 @@ export default async function WorkspacePage({
           </section>
         )}
 
+        {/* Estado vacio — cuando no hay proyectos ni tareas */}
         {visibleProjects.length === 0 && pendingTasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
             <FolderKanban size={32} className="mb-3 text-muted-foreground/40" />
-            <p className="text-sm font-medium text-foreground">Workspace vacío</p>
+            <p className="text-sm font-medium text-foreground">Workspace vacio</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Creá tu primer proyecto para empezar
+              Crea tu primer proyecto para empezar
             </p>
             <Link
               href={`/workspace/${workspaceId}/projects`}
@@ -129,6 +137,7 @@ export default async function WorkspacePage({
   );
 }
 
+// ─── Componente auxiliar: tarjeta de metrica ──────────────────────────────────
 function StatCard({
   icon,
   label,

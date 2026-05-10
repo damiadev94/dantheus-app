@@ -1,4 +1,5 @@
 "use client";
+// Client Component porque necesita estado para mostrar/ocultar el formulario
 
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
@@ -8,18 +9,18 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ProjectCard, type ProjectCardData } from "@/features/project/components/ProjectCard";
 import { CreateProjectForm } from "@/features/project/components/CreateProjectForm";
 
-// Esta página es Client Component para manejar el toggle del form.
-// Los datos se cargan en el Server Component padre (layout) — aquí se re-fetchean
-// al montar para tener la lista actualizada sin depender de props.
-
 export default function ProjectsPage() {
+  // ─── Parametros de la URL ──────────────────────────────────────────────────
   const params = useParams();
   const workspaceId = params.workspaceId as string;
 
+  // ─── Estado ────────────────────────────────────────────────────────────────
   const [projects, setProjects] = useState<ProjectCardData[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(false); // controla si se muestra el form
   const [loading, setLoading] = useState(true);
 
+  // ─── Carga de datos ────────────────────────────────────────────────────────
+  // Se re-ejecuta al cerrar el form (showForm cambia a false) para refrescar la lista
   useEffect(() => {
     getProjectsByWorkspace(workspaceId).then((data) => {
       setProjects(data as ProjectCardData[]);
@@ -27,8 +28,10 @@ export default function ProjectsPage() {
     });
   }, [workspaceId, showForm]);
 
+  // Ocultar el proyecto General (solo es visible en el kanban)
   const visible = projects.filter((p) => !p.isGeneral);
 
+  // ─── Vista ─────────────────────────────────────────────────────────────────
   return (
     <div>
       <PageHeader
@@ -46,6 +49,7 @@ export default function ProjectsPage() {
       />
 
       <div className="px-8 py-6 space-y-5">
+        {/* Formulario de creacion (se muestra al presionar el boton) */}
         {showForm && (
           <CreateProjectForm
             workspaceId={workspaceId}
@@ -53,6 +57,7 @@ export default function ProjectsPage() {
           />
         )}
 
+        {/* Skeleton mientras carga | lista vacia | grilla de tarjetas */}
         {loading ? (
           <div className="grid grid-cols-3 gap-3">
             {[1, 2, 3].map((i) => (
@@ -66,7 +71,7 @@ export default function ProjectsPage() {
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <p className="text-sm font-medium text-foreground">Sin proyectos</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Creá tu primer proyecto con el botón de arriba
+              Crea tu primer proyecto con el boton de arriba
             </p>
           </div>
         ) : (

@@ -9,29 +9,37 @@ export function CreateProjectForm({
   onClose,
 }: {
   workspaceId: string;
+  // onClose: se llama cuando el form se cierra (cancel o exito)
   onClose: () => void;
 }) {
+  // ─── Estado ────────────────────────────────────────────────────────────────
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
-  const formRef = useRef<HTMLFormElement>(null);
+  const [isPending, startTransition] = useTransition(); // isPending = true mientras espera al server
+  const formRef = useRef<HTMLFormElement>(null);         // referencia para hacer reset del form
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // ─── Envio del formulario ──────────────────────────────────────────────────
+  function handleSubmit(e: React.BaseSyntheticEvent) {
     e.preventDefault();
+    // Zod no parsea FormData nativo — convertir antes de pasar a la action
     const data = Object.fromEntries(new FormData(e.currentTarget));
     setError(null);
     startTransition(async () => {
       const result = await createProject(data);
       if (result && "error" in result) {
+        // Mostrar error inline bajo el form
         setError(result.error ?? "Error al crear proyecto");
       } else {
         formRef.current?.reset();
-        onClose();
+        onClose(); // cierra el panel y refresca la lista
       }
     });
   }
 
+  // ─── Vista ─────────────────────────────────────────────────────────────────
   return (
     <div className="rounded-lg border border-border bg-card p-5">
+
+      {/* Encabezado con boton de cerrar */}
       <div className="mb-4 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Nuevo proyecto</h3>
         <button
@@ -43,8 +51,10 @@ export function CreateProjectForm({
       </div>
 
       <form ref={formRef} onSubmit={handleSubmit} className="space-y-3">
+        {/* workspaceId oculto — el server lo usa para saber a que workspace pertenece */}
         <input type="hidden" name="workspaceId" value={workspaceId} />
 
+        {/* Nombre */}
         <input
           name="name"
           placeholder="Nombre del proyecto *"
@@ -53,14 +63,16 @@ export function CreateProjectForm({
           className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
         />
 
+        {/* Descripcion */}
         <textarea
           name="description"
-          placeholder="Descripción (opcional)"
+          placeholder="Descripcion (opcional)"
           rows={2}
           disabled={isPending}
           className="w-full resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50"
         />
 
+        {/* Estado inicial */}
         <select
           name="status"
           defaultValue="IDEA"
@@ -72,10 +84,12 @@ export function CreateProjectForm({
           <option value="PAUSED">Pausado</option>
         </select>
 
+        {/* Error de servidor */}
         {error && (
           <p className="text-xs text-destructive">{error}</p>
         )}
 
+        {/* Acciones */}
         <div className="flex justify-end gap-2 pt-1">
           <button
             type="button"
@@ -90,7 +104,7 @@ export function CreateProjectForm({
             disabled={isPending}
             className="rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
           >
-            {isPending ? "Creando…" : "Crear proyecto"}
+            {isPending ? "Creando..." : "Crear proyecto"}
           </button>
         </div>
       </form>
