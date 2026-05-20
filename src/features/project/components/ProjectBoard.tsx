@@ -1,9 +1,8 @@
 "use client";
 
-import type { Project } from "../types";
-import { ProjectCard } from "./ProjectCard";
+import { ProjectCard, type ProjectCardData } from "./ProjectCard";
 
-type Props = { projects: Project[] };
+type Props = { projects: ProjectCardData[] };
 
 export function ProjectBoard({ projects }: Props) {
   return (
