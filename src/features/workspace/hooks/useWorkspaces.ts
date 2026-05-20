@@ -1,18 +1,17 @@
 "use client";
 
 // ─── Imports ──────────────────────────────────────────────────────────────────
-import { useState, useEffect } from "react";
-import type { Workspace } from "../types";
+import { useQuery } from "@tanstack/react-query";
+import { getWorkspaces } from "../actions";
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useWorkspaces() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // TODO: reemplazar con TanStack Query
-    setIsLoading(false);
-  }, []);
-
-  return { workspaces, isLoading };
+  return useQuery({
+    queryKey: ["workspaces"],
+    queryFn: async () => {
+      const result = await getWorkspaces();
+      if (result.error) throw new Error(result.error);
+      return result.data;
+    },
+  });
 }

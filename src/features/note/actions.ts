@@ -88,6 +88,25 @@ export async function updateNote(noteId: string, input: UpdateNoteInput) {
   return { data: updated };
 }
 
+// ── getNotes ───────────────────────────────────────────────────────────────────
+export async function getNotes(scope: "global" | "local", ownerId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "No autorizado", data: null };
+
+  const notes =
+    scope === "global"
+      ? await prisma.note.findMany({
+          where: { userId: session.user.id, scope: "GLOBAL", status: "ACTIVE" },
+          orderBy: { updatedAt: "desc" },
+        })
+      : await prisma.note.findMany({
+          where: { workspaceId: ownerId, scope: "LOCAL", status: "ACTIVE" },
+          orderBy: { updatedAt: "desc" },
+        });
+
+  return { data: notes, error: null };
+}
+
 export async function archiveNote(noteId: string) {
   // * 1. Autenticar
   const session = await auth();

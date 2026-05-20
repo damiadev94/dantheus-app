@@ -86,6 +86,19 @@ export async function updateWorkspace(workspaceId: string, formData: unknown) {
   return { success: true }
 }
  
+// ── getWorkspaces ──────────────────────────────────────────────────────────────
+export async function getWorkspaces() {
+  const session = await auth()
+  if (!session?.user?.id) return { error: 'No autorizado', data: null }
+
+  const workspaces = await prisma.workspace.findMany({
+    where: { userId: session.user.id, isActive: true },
+    orderBy: { createdAt: 'asc' },
+  })
+
+  return { data: workspaces, error: null }
+}
+
 // ── deleteWorkspace ────────────────────────────────────────────────────────────
 // Implementa R7: eliminar workspace elimina todas sus entidades locales en cascada.
 // La cascada está configurada en el schema de Prisma (onDelete: Cascade).

@@ -1,5 +1,3 @@
-@AGENTS.md
-
 # CLAUDE.md — LifeOS
 
 Contexto completo del proyecto para Claude Code. Leer antes de cualquier tarea.
@@ -125,24 +123,24 @@ Toda operación de DB pasa por `actions.ts` o `queries.ts`.
 'use server'
 
 export async function hacerAlgo(formData: unknown) {
-  // 1. AUTENTICAR
+  // [1/5] AUTENTICAR
   const session = await auth()
   if (!session?.user?.id) throw new Error('No autorizado')
 
-  // 2. VALIDAR (Zod)
+  // [2/5] VALIDAR (Zod)
   const parsed = schema.safeParse(formData)
   if (!parsed.success) return { error: parsed.error.errors[0].message }
 
-  // 3. AUTORIZAR (el recurso pertenece al usuario)
+  // [3/5] AUTORIZAR (el recurso pertenece al usuario)
   const recurso = await prisma.entidad.findFirst({
     where: { id: parsed.data.id, workspace: { userId: session.user.id } }
   })
   if (!recurso) return { error: 'No encontrado' }
 
-  // 4. EJECUTAR
+  // [4/5] EJECUTAR
   await prisma.entidad.create({ data: parsed.data })
 
-  // 5. REVALIDAR
+  // [5/5] REVALIDAR
   revalidatePath('/ruta/afectada')
   return { success: true }
 }
@@ -152,7 +150,93 @@ export async function hacerAlgo(formData: unknown) {
 
 ---
 
-## Reglas de negocio críticas (de la Fase 2)
+## Patrón de Query (queries.ts)
+
+```typescript
+// CORRECTO: autorización dentro del WHERE, select explícito
+export async function getProjectsByWorkspace(workspaceId: string, userId: string) {
+  return prisma.project.findMany({
+    where: {
+      workspaceId,
+      workspace: { userId }, // ← ownership check dentro de la query
+    },
+    select: { id: true, name: true, status: true, isGeneral: true },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+// MAL: query sin verificar ownership → cualquier usuario puede acceder
+const project = await prisma.project.findUnique({ where: { id: projectId } })
+```
+
+---
+
+## Schema Prisma — campos reales por modelo
+
+> Leer `prisma/schema.prisma` antes de escribir cualquier query.
+> Este resumen cubre los campos más usados para evitar inventar nombres.
+
+```
+User              id · email · passwordHash · name · avatarUrl
+Workspace         id · userId · name · color · icon · isActive
+Client            id · workspaceId · name · email · isActive
+Category          id · userId · name · color · icon
+Project           id · workspaceId · clientId? · categoryId? · name · status
+                  isGeneral · budget · budgetCurrency · startDate · endDate
+Task              id · projectId · title · status · priority · dueDate · order
+Account           id · userId · name · type · currency · initialBalance · currentBalance · isActive
+Transaction       id · workspaceId · accountId · projectId? · type · amount
+                  currency · date · status · isRecurring · recurrenceId?
+InstallmentGroup  id · workspaceId · accountId · description · totalAmount
+                  installmentCount · startDate
+WorkspaceGoal     id · workspaceId · period (YYYY-MM) · incomeTarget? · expenseLimit? · savingsTarget?
+Note              id · userId? · workspaceId? · title · content (Json) · type
+                  scope · status · url? · learningStatus?
+Tag               id · userId? · workspaceId? · name · color · scope
+NoteProject       noteId · projectId
+NoteTag           noteId · tagId
+TransactionTag    transactionId · tagId
+```
+
+### Enums disponibles
+
+```
+AccountType:        CASH | BANK | DIGITAL_WALLET | CREDIT | INVESTMENT
+NoteType:           NOTE | RESOURCE | LEARNING
+ScopeType:          GLOBAL | LOCAL
+NoteStatus:         ACTIVE | ARCHIVED
+LearningStatus:     PENDING | IN_PROGRESS | COMPLETED
+ProjectStatus:      IDEA | ACTIVE | PAUSED | CLOSED
+TaskStatus:         PENDING | IN_PROGRESS | DONE | CANCELLED
+TaskPriority:       LOW | MEDIUM | HIGH
+TransactionType:    INCOME | EXPENSE | TRANSFER
+TransactionStatus:  EXECUTED | SCHEDULED
+```
+
+### Reglas de FK críticas
+
+- `Transaction.accountId` → `onDelete: Restrict` — nunca borrar una cuenta que tenga movimientos
+- `Transaction.projectId` → `onDelete: SetNull` — al borrar un proyecto, la transacción sobrevive sin proyecto
+- `Project.clientId / categoryId` → `onDelete: SetNull` — el proyecto sobrevive al borrar cliente/categoría
+- `Note.userId / workspaceId` — exactamente uno presente según `scope` (nunca ambos, nunca ninguno)
+- `Tag.userId / workspaceId` — exactamente uno presente según `scope`
+
+### Índices disponibles — usar para informar `where` y `orderBy`
+
+```
+Workspace:        [userId, isActive]
+Project:          [workspaceId, status] · [workspaceId, isGeneral] · [clientId] · [categoryId]
+Task:             [projectId, status] · [projectId, order] · [dueDate]
+Transaction:      [workspaceId, status, date] · [accountId, status] · [workspaceId, date] · [recurrenceId]
+Note:             [userId, scope] · [workspaceId, scope] · [userId, learningStatus] · [type, learningStatus]
+Account:          [userId]
+InstallmentGroup: [workspaceId]
+WorkspaceGoal:    [workspaceId] · unique[workspaceId, period]
+```
+
+---
+
+## Reglas de negocio críticas
 
 ```
 R1  — project.clientId XOR project.categoryId (nunca ambos)
@@ -189,35 +273,19 @@ Tag  (scope=GLOBAL)           Note (scope=LOCAL)
                               Tag  (scope=LOCAL)
                               WorkspaceGoal
 
-Tablas N:M: NoteProject, NoteTag, TransactionTag
+Tablas N:M: NoteProject · NoteTag · TransactionTag
 ```
 
-**Note y Tag usan el patrón scope:** `userId` presente = global, `workspaceId` presente = local. Nunca ambos, nunca ninguno.
-
----
-
-## Schema Prisma — resumen de enums
-
-```
-AccountType:        CASH | BANK | DIGITAL_WALLET | CREDIT | INVESTMENT
-NoteType:           NOTE | RESOURCE | LEARNING
-ScopeType:          GLOBAL | LOCAL
-NoteStatus:         ACTIVE | ARCHIVED
-LearningStatus:     PENDING | IN_PROGRESS | COMPLETED
-ProjectStatus:      IDEA | ACTIVE | PAUSED | CLOSED
-TaskStatus:         PENDING | IN_PROGRESS | DONE | CANCELLED
-TaskPriority:       LOW | MEDIUM | HIGH
-TransactionType:    INCOME | EXPENSE | TRANSFER
-TransactionStatus:  EXECUTED | SCHEDULED
-```
+**Note y Tag usan el patrón scope:** `userId` presente = global, `workspaceId` presente = local.
+Nunca ambos, nunca ninguno.
 
 ---
 
 ## Variables de entorno requeridas
 
 ```bash
-DATABASE_URL     # Neon pooled (pgbouncer=true) — para queries
-DIRECT_URL       # Neon direct — para migraciones
+DATABASE_URL     # Neon pooled (pgbouncer=true) — para queries en runtime
+DIRECT_URL       # Neon direct — solo para migraciones (prisma migrate)
 AUTH_SECRET      # NextAuth secret (openssl rand -base64 32)
 NEXTAUTH_URL     # http://localhost:3000 en dev, URL de Vercel en prod
 CRON_SECRET      # Bearer token para autenticar el cron de Vercel
@@ -237,6 +305,8 @@ CRON_SECRET      # Bearer token para autenticar el cron de Vercel
 - Usar `Prisma.ModelGetPayload<{include: {...}}>` para tipos de queries complejas
 - Nunca `any`. Si no se sabe el tipo, usar `unknown` y validar con Zod
 - Los tipos inferidos de Zod reemplazan interfaces duplicadas: `type X = z.infer<typeof xSchema>`
+- `content` de Tiptap es `Json` en Prisma → tipar como `JSONContent` de `@tiptap/core`
+- `Decimal` de Prisma no es `number` de JS → usar `.toNumber()` o `.toString()` al serializar
 
 **Componentes:**
 - Server Components por defecto — agregar `'use client'` solo cuando sea necesario
@@ -246,11 +316,24 @@ CRON_SECRET      # Bearer token para autenticar el cron de Vercel
 **Queries Prisma:**
 - Siempre usar `select` explícito cuando no se necesitan todos los campos
 - Los `include` profundos (más de 2 niveles) se reescriben como queries separadas
-- Índices ya definidos en el schema — no agregar `orderBy` sin índice
+- Índices ya definidos en el schema — no agregar `orderBy` sin índice correspondiente
+- Las operaciones atómicas (R9, R11) usan `prisma.$transaction([...])`
 
 **Imports:**
 - Usar alias `@/` siempre (nunca paths relativos con `../`)
 - Orden: librerías externas → `@/lib` → `@/features` → `@/components` → tipos
+
+---
+
+## Errores conocidos — no repetir
+
+- `auth()` se importa de `@/lib/auth`, nunca de `next-auth` directamente
+- `revalidatePath()` siempre después del `await` de mutación, nunca antes
+- `Decimal` de Prisma no serializa como JSON automáticamente — convertir antes de retornar desde una Server Action
+- `@db.Date` llega como `Date` de JS pero sin hora — no asumir timezone, operar siempre en UTC
+- Al crear `InstallmentGroup` (R9): generar las N `Transaction` en la misma `prisma.$transaction()`
+- `TRANSFER` (R11): las 2 transactions deben crearse atómicamente — si una falla, rollback de ambas
+- No usar `findUnique` sin incluir el ownership check — siempre `findFirst` con `workspace: { userId }`
 
 ---
 
@@ -275,16 +358,16 @@ npm run lint
 
 ## Estado actual de implementación
 
-| Módulo | Estado |
-|---|---|
-| Setup e infraestructura | ✅ Completo |
-| Autenticación | ✅ Completo |
-| Workspaces | ✅ Actions + Queries |
-| Proyectos y Tareas | ✅ Actions + Queries |
-| Finanzas | ✅ Actions + Queries + Cron |
-| Notas y Biblioteca | ⏳ Pendiente |
-| Dashboards | ⏳ Pendiente |
-| Componentes UI (Sidebar, Kanban) | ⏳ Pendiente |
+| Módulo                        | Estado                |
+|-------------------------------|-----------------------|
+| Setup e infraestructura       | ✅ Completo           |
+| Autenticación                 | ✅ Completo           |
+| Workspaces                    | ✅ Actions + Queries  |
+| Proyectos y Tareas            | ✅ Actions + Queries  |
+| Finanzas                      | ✅ Actions + Queries + Cron |
+| Notas y Biblioteca            | ⏳ Pendiente          |
+| Dashboards                    | ⏳ Pendiente          |
+| Componentes UI (Sidebar, etc) | ⏳ Pendiente          |
 
 **Siguiente tarea prioritaria:** Implementar `src/features/note/` con editor Tiptap y lógica de scope global/local (R4, R5).
 
@@ -299,3 +382,5 @@ npm run lint
 - No eliminar el proyecto General de un workspace (R2)
 - No commitear `.env` — solo `.env.example`
 - No crear migraciones manualmente — siempre via `prisma migrate dev`
+- No usar `findUnique` sin ownership check — usar `findFirst` con el userId en el WHERE
+- No operar `Decimal` de Prisma como `number` JS sin convertir primero

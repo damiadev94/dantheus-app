@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(npm ls *)",
-      "Bash(Get-ChildItem -Path \"d:\\\\[DEV]\\\\[PERSONAL] app-gestion-proyectos\\\\dantheus-app\" -Force)"
+      "Bash(Get-ChildItem -Path \"d:\\\\[DEV]\\\\[PERSONAL] app-gestion-proyectos\\\\dantheus-app\" -Force)",
+      "Bash(xargs wc -l)",
+      "Bash(npm uninstall *)",
+      "Bash(npx tsc *)"
     ]
   }
 }
